@@ -27,7 +27,7 @@ async function setupGauge() {
   };
   var target = document.getElementById('gauge');
   gauge = new Gauge(target).setOptions(opts);
-  gauge.animationSpeed = 15;
+  gauge.animationSpeed = 12;
   gauge.minValue = 0
   gauge.maxValue = 100
   gauge.set(0.1)

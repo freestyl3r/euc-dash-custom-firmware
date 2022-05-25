@@ -91,11 +91,11 @@ async function initialize() {
   pwmAlarmSpeed = 0
   rendered = false
   wheelModel = ''
+  setupGauge()
   document.getElementById('scan-disconnect').innerText = 'Disconnect'
   document.getElementById('scan-disconnect').className = 'btn-lg btn-danger'
   document.getElementById('scan-disconnect').onclick = disconnect
   document.getElementById('packet-switch').classList.remove('invisible')
-  await sendCommand('fetchModel')
 }
 
 function disconnect() {
@@ -142,7 +142,6 @@ function setField(field, val) {
 async function setWheelModel(data) {
   wheelModel = Decoder.decode(data.buffer.slice(5)).trim()
   setField('wheel-model', wheelModel)
-  await sendCommand('fetchModelCode')
 }
 
 function setWheelCodeName(data) {
@@ -202,13 +201,6 @@ function updateVoltageHelpText() {
 
 function readFirstMainPacket(data) {
   voltage = data.getUint16(2) / 100
-  scaledVoltage = (voltage * modelParams()['voltMultiplier']).toFixed(1)
-  setField('voltage', scaledVoltage)
-
-  voltageHelp = document.getElementById('voltage-help')
-  if (voltageHelp.innerText == '')
-    updateVoltageHelpText()
-
   battery = (100 * (voltage / baseCellSeries - modelParams()['minCellVolt']) /
    (maxCellVolt - modelParams()['minCellVolt'])).toFixed(2)
   setField('battery', battery)
@@ -216,61 +208,16 @@ function readFirstMainPacket(data) {
   speed = Math.abs(data.getInt16(4) * 3.6 / 100).toFixed(1)
   setField('speed', speed)
 
-  tripDistance = (data.getUint32(6) / 1000).toFixed(2)
-  setField('trip-distance', tripDistance)
-
   phaseCurrent = data.getInt16(10) / 100
   setField('phase-current', phaseCurrent)
 
-  temp = (data.getInt16(12) / 340 + 36.53).toFixed(2)
-  setField('temp', temp)
-
-  resets = data.getInt16(14)
-  if (resets > 10)
-    resets -= 9
-  setField('resets', resets)
-
-  volume = data.getInt16(16)
-  document.getElementById(`volume-${volume}`).setAttribute('checked', true)
+  pwm = Math.abs(data.getInt16(12) / 10).toFixed(1)
+  gauge.set(pwm)
 }
 
 function readSecondMainPacket(data) {
-  totalDistance = (data.getUint32(6) / 1000).toFixed(2)
-  setField('total-distance', totalDistance)
-
-  modes = data.getUint16(10)
-  pedalMode      = modes >> 13 & 0x3
-  speedAlarmMode = modes >> 10 & 0x3
-  tiltAngleMode  = modes >>  7 & 0x3
-
-  document.getElementById(`pedal-mode-${pedalMode}`).setAttribute('checked', true)
-  document.getElementById(`speed-alert-${speedAlarmMode}`).setAttribute('checked', true)
-  document.getElementById(`tilt-angle-${tiltAngleMode}`).setAttribute('checked', true)
-
-  powerOffTime = data.getUint16(12)
-  powerOffMinutes = Math.floor(powerOffTime / 60)
-  powerOffSeconds = powerOffTime - (powerOffMinutes * 60)
-  setField('poweroff-timer', `${powerOffMinutes}:${powerOffSeconds}`)
-
   tiltbackSpeed = data.getUint16(14)
-  document.getElementById('tiltback-speed-label').innerHTML = tiltbackSpeed == 100 ? 'Disabled' : tiltbackSpeed
-  document.getElementById('tiltback-speed').value = tiltbackSpeed
-
-  ledMode = data.getUint16(16)
-  document.getElementById(`led-mode-${ledMode}`).setAttribute('checked', true)
-
-  faultAlarm = data.getUint8(18)
-  faultAlarmLine = ''
-  for (let bit = 0; bit < 8; bit++) {
-    if (faultAlarm >> bit & 0x1)
-      faultAlarmLine += faultAlarms[bit] + ', '
-  }
-
-  faultAlarmLine = faultAlarmLine.slice(0, -2)
-  setField('fault-alarms', faultAlarmLine)
-
-  if (faultAlarm & 0x1 && (pwmAlarmSpeed == 0 || speed < pwmAlarmSpeed))
-    updatePwmAlarmSpeed()
+  setField('tiltback-speed', tiltbackSpeed == 100 ? 'Disabled' : tiltbackSpeed)
 }
 
 function readMainPackets(event) {
